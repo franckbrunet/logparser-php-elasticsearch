@@ -1,58 +1,82 @@
+#!/usr/bin/php
 <?php
 require 'vendor/autoload.php';
 
-$LOG_DB_PATH = "/var/run/logstash";
-$LOG_2_MONITOR = "/var/log/apache2/error.log.1";
-$LOG_DB_FILE_PATH = $LOG_DB_PATH."/".basename($LOG_2_MONITOR).".pos";
+$CONFIG_FILE_PATH = "monitor.json";
+$globalConfig = array();
+if( file_exists($CONFIG_FILE_PATH) ){ $globalConfig = json_decode(file_get_contents($CONFIG_FILE_PATH,true)); }
 
-//~ Initialize the client
-$client = new Elasticsearch\Client();
+#~ Get the file database path to record where we stopped the last time
+$LOG_DB_PATH = $globalConfig->config->log_db_path; //~ "/var/run/logstash";
 
-//~ Get the last position in the log file
-$logHandlePosition = file_exists($LOG_DB_FILE_PATH)?chop(file_get_contents($LOG_DB_FILE_PATH)):0;
-$logHandlePosition = intval($logHandlePosition)>0?intval($logHandlePosition):0;
+//~ Walking through provided inputs
+foreach($globalConfig->inputs as $key => $data){
 
-$handle = @fopen($LOG_2_MONITOR, "r");
-if ($handle) {
-  //~ Positioning the pointer to the last location
-  fseek($handle, $logHandlePosition);
+  $LOG_2_MONITOR = $data->filepath;//~ "/var/log/apache2/error.log.1";
+  $LOG_DB_FILE_PATH = $LOG_DB_PATH."/".basename($LOG_2_MONITOR).".pos";
   
-  //~ Digesting the new log
-  while (($buffer = fgets($handle, 4096)) !== false) {
-    $lineInfos = array();
+  echo "Monitoring ".$LOG_2_MONITOR;
   
-    $process = chop(preg_replace('/^\[.+?\] \[(.+?)\:.+?\].*$/', '$1', $buffer));
-    $lineInfos[$process] = chop(preg_replace('/^\[.+?\] \[.+?\:(.+?)\].*$/', '$1', $buffer));
-    
-    $lineInfos['pid'] = chop(preg_replace('/^\[.+?\] \[.+?\] \[pid (.+?)\].*$/', '$1', $buffer));
-    $lineInfos['message'] = chop(preg_replace('/^\[.+?\] \[.+?\] \[.+?\] (.*)$/', '$1', $buffer));
-    $lineInfos['server_ip'] = "";
-    $lineInfos['server_name'] = "arm64 A3";
   
-    //~ Get time stamp
-    $log_datetime = chop(preg_replace('/^\[(.+?)\].*$/', '$1', $buffer));
-    $log_datetime = date_create_from_format('D M d H:i:s.u Y',$log_datetime);
-    $lineInfos['log_time'] = $log_datetime->format('Y-m-d H:i:s');
+  //~ Initialize the client
+  $client = new Elasticsearch\Client();
+  
+  //~ Get the last position in the log file
+  $logHandlePosition = file_exists($LOG_DB_FILE_PATH)?chop(file_get_contents($LOG_DB_FILE_PATH)):0;
+  $logHandlePosition = intval($logHandlePosition)>0?intval($logHandlePosition):0;
+  
+  $handle = @fopen($LOG_2_MONITOR, "r");
+  if ($handle) {
+    //~ Positioning the pointer to the last location
+    fseek($handle, $logHandlePosition);
     
-    $params = array();
-    $params['body']  = $lineInfos;
-    $params['index'] = 'demo';
-    $params['type']  = 'apache_logs';
-    $params['timestamp'] = $log_datetime->getTimestamp();
-    //~ $params['id']    = 'my_id'; Let the system create the index
+    $nbLines = 0;
     
-    //~ Send the data to elasticsearch
-    $ret = $client->index($params);
+    //~ Digesting the new log
+    while (($buffer = fgets($handle, 4096)) !== false) {
+      $lineInfos = array();
     
-    echo ftell($handle)." : ".$buffer;
+      $pattern = $data->pattern;//~ '/^\[(.+?)\] \[(.+?)\:(.+?)\] \[pid (\d+?)\] (.+?): (.*)$/';
+      $buffer = trim($buffer);
+      
+      //~ We are filling up the data from the params section
+      foreach($data->params_body as $key => $value){
+        $lineInfos[$key] = preg_replace($pattern, $value, $buffer);
+      }
+    
+      //~ Get time stamp
+      $log_datetime = date_create_from_format($data->timestamp_format,$lineInfos['timestamp']);
+      
+      //~ Preparing elasticsearch payload
+      $params = array();
+      $params['body']  = $lineInfos;
+      $params['index'] = $data->index;
+      $params['type']  = $data->type;
+      $params['timestamp'] = $log_datetime->getTimestamp();
+      //~ $params['id']    = 'my_id'; Let the system create the index
+      
+      //~ Send the data to elasticsearch
+      $ret = $client->index($params);
+      
+      $nbLines++;
+    }
+    
+    echo " $nbLines \n";
+    
+    //~ Record the last position in the file
+    //~ to not restart from the begining all the time
+    file_put_contents($LOG_DB_FILE_PATH, ftell($handle));
+    
+    //~ Sends error out if we didn't reach the end if the file
+    if (!feof($handle)) {
+      echo "Error: unexpected fgets() fail\n";
+    }
+    
+    //~ Close the file
+    fclose($handle);
   }
-  
-  file_put_contents($LOG_DB_FILE_PATH, ftell($handle));
-  
-  if (!feof($handle)) {
-    echo "Error: unexpected fgets() fail\n";
-  }
-  fclose($handle);
-}
+  else{ echo "Unable to open file: ".$LOG_2_MONITOR."\n"; }
+
+} //~ foreach
 
 ?>
