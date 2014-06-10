@@ -1,0 +1,36 @@
+{
+  "config": { "log_db_path": "/var/run/logstash" },
+  "inputs": {
+            "error_log":{
+              "index":"demo",
+              "type":"Apache Error Log",
+              "filepath" : "/var/log/apache2/error.log",
+              "pattern"  : "/^\\[(.+?)\\] \\[(.+?)\\:(.+?)\\] \\[pid (\\d+?)\\] (.+?): (.*)$/",
+              "timestamp_format" : "D M d H:i:s.u Y",
+              "params_body": {
+                "timestamp":"$1",
+                "process":"$2",
+                "process_notice":"$3",
+                "pid":"$4",
+                "codeinfo":"$5",
+                "message":"$6"
+              },
+              "server_ip":"",
+              "server_name":"arm64 A3"          
+            },
+            "access_log":{
+              "index":"demo",
+              "type":"Apache Access Log",
+              "filepath" : "/var/log/apache2/access.log",
+              "pattern"  : "/^(.+?) (.+?) (.+?) \\[(.+?)\\] (.*)$/",
+              "timestamp_format":"d/M/Y:H:i:s O",
+              "params_body": {
+                "client_ip":"$1",
+                "timestamp":"$4",
+                "message":"$5"
+              },
+              "server_ip":"",
+              "server_name":"arm64 A3"
+            }
+          }
+}
