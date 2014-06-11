@@ -15,7 +15,7 @@ foreach($globalConfig->inputs as $key => $data){
   $LOG_2_MONITOR = $data->filepath;//~ "/var/log/apache2/error.log.1";
   $LOG_DB_FILE_PATH = $LOG_DB_PATH."/".basename($LOG_2_MONITOR).".pos";
   
-  echo "Monitoring ".$LOG_2_MONITOR;
+  echo "[".date('Y/m/d H:i:s')."] Monitoring ".$LOG_2_MONITOR;
   
   
   //~ Initialize the client
