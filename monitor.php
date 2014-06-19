@@ -45,14 +45,14 @@ foreach($globalConfig->inputs as $key => $data){
       }
     
       //~ Get time stamp
-      $log_datetime = date_create_from_format($data->timestamp_format,$lineInfos['timestamp']);
+      $log_datetime = date_create_from_format($data->timestamp_format,$lineInfos['@timestamp']);
       
       //~ Preparing elasticsearch payload
       $params = array();
       $params['body']  = $lineInfos;
       $params['index'] = $data->index;
       $params['type']  = $data->type;
-      $params['timestamp'] = $log_datetime->getTimestamp();
+      $params['@timestamp'] = $log_datetime->getTimestamp();
       //~ $params['id']    = 'my_id'; Let the system create the index
       
       //~ Send the data to elasticsearch
