@@ -8,7 +8,7 @@
               "pattern"  : "/^\\[(.+?)\\] \\[(.+?)\\:(.+?)\\] \\[pid (\\d+?)\\] (.+?): (.*)$/",
               "timestamp_format" : "D M d H:i:s.u Y",
               "params_body": {
-                "timestamp":"$1",
+                "@timestamp":"$1",
                 "process":"$2",
                 "process_notice":"$3",
                 "pid":"$4",
@@ -26,7 +26,7 @@
               "timestamp_format":"d/M/Y:H:i:s O",
               "params_body": {
                 "client_ip":"$1",
-                "timestamp":"$4",
+                "@timestamp":"$4",
                 "message":"$5"
               },
               "server_ip":"",
